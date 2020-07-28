@@ -8,6 +8,7 @@
 #include <Windows.h>
 #include <iostream>
 #include <graphics.h>
+#include <easyx.h>
 
 using namespace std;
 
@@ -20,7 +21,8 @@ using namespace std;
 
 #define STRING_MAX 80 /* used for console input */
 
-#define DATA_MAX 1000
+#define DATA_MAX 500
+#define PARTICLE_MAX 10000
 
 #define NT_PRESSED 1
 #define NT_RELEASED 2
@@ -31,10 +33,42 @@ RECT desktopr;
 int wide_graph, high_graph;
 float wide_line;
 
-int latency = 0;
-int speed = 10;
-int timer_max = 6;
+int latency = 3;
+int speed = 1;
+int timer_max = 1;
 int timer = 0;
+
+bool glow_on = true;
+int glow_size;
+int glow_color_minus;
+
+bool particle_on = true;
+int num_particle_tick = 4;
+
+struct PARTICLE {
+	int size;
+	int speed;
+	int opacity;
+	int life;
+};
+PARTICLE data_p[PARTICLE_MAX];
+
+int use_set;
+int num_set;
+
+struct nodec {
+	int r;
+	int g;
+	int b;
+};
+
+struct nodes {
+	char name[STRING_MAX];
+	bool up;
+	nodec fcolor;
+	nodec bcolor;
+
+};
 
 struct noden {
 	float wide;
@@ -92,8 +126,10 @@ void clean_data() {
 	cl1 = cl;
 	if (op1 != cl1) {
 		op1++;
+		op1 %= DATA_MAX;
 		if (data_n[op1].status == NT_NONE) {
 			op++;
+			op %= DATA_MAX;
 			clean_data();
 		}
 	}
@@ -102,7 +138,27 @@ void clean_data() {
 }
 
 void refresh() {
-	//cleardevice();
+	cleardevice();
+	BeginBatchDraw();
+	for (int i = 0; i < 88; ++i) {
+		if (pressing_note[i].status == NT_PRESSED) {
+			//glow
+			if (glow_on == true) {
+				for (int j = glow_size; j >= 0; --j) {
+					setfillcolor(RGB((glow_size - j)*glow_color_minus/10, (glow_size - j)*glow_color_minus, (glow_size - j)*glow_color_minus / 10));
+					setlinecolor(RGB((glow_size - j)*glow_color_minus / 10, (glow_size - j)*glow_color_minus, (glow_size - j)*glow_color_minus / 10));
+					fillellipse(note.position[i] - j, -glow_size / 3 - j, note.position[i] + j, glow_size / 3 + j);
+				}
+				setlinecolor(RGB(0, 255, 0));
+			}
+			//particle
+
+			//write
+			pressing_note[i].y += speed;
+			line(note.position[i], pressing_note[i].y, note.position[i], 0);
+			//cout << "\nprint(new): " << i;
+		}
+	}
 	op1 = op;
 	cl1 = cl;
 	while (op1 != cl1) {
@@ -112,23 +168,18 @@ void refresh() {
 			data_n[op1].endy += speed;
 			data_n[op1].starty += speed;
 			line(note.position[data_n[op1].key], data_n[op1].starty, note.position[data_n[op1].key], data_n[op1].endy);
-			setlinecolor(BLACK);
-			line(note.position[data_n[op1].key], data_n[op1].endy, note.position[data_n[op1].key], 0);
-			setlinecolor(GREEN);
+			//setlinecolor(BLACK);
+			//line(note.position[data_n[op1].key], data_n[op1].endy, note.position[data_n[op1].key], 0);
+			//setlinecolor(RGB(0,255,0));
 			//cout << "\nprint: " << data_n[op1].key;
 			if (data_n[op1].endy >= high_graph) {
 				data_n[op1].status = NT_NONE;
 			}
 		}
 	}
-	for (int i = 0; i < 88; ++i) {
-		if (pressing_note[i].status == NT_PRESSED) {
-			pressing_note[i].y += speed;
-			line(note.position[i], pressing_note[i].y, note.position[i], 0);
-			//cout << "\nprint(new): " << i;
-		}
-	}
+	
 	clean_data();
+	FlushBatchDraw();
 	return;
 }
 
@@ -179,7 +230,7 @@ int get_number(char *prompt)
 
 
 
-void main_test_input() {
+void main_function() {
     PmStream * midi;
     PmError status, length;
     PmEvent buffer[1];
@@ -209,10 +260,20 @@ void main_test_input() {
 	setbkmode(OPAQUE);//设置背景色填充而非透明背景色
 	setbkcolor(BLACK);//设置背景色为黑色
 	cleardevice();//更新图像以填充背景色
-	//setfillstyle(BS_SOLID);//更改填充模式为纯色（固体）填充
-	//setfillcolor(GREEN);//更改填充颜色为绿色
-	setlinestyle(PS_SOLID | PS_ENDCAP_FLAT, (int)note.wide);//更改画线模式为实线，两端平坦，宽度为预定宽度
-	setlinecolor(GREEN);//更改画线颜色为绿色
+	setfillstyle(BS_SOLID);//更改填充模式为纯色（固体）填充
+	//setfillcolor(RGB(0,255,0));//更改填充颜色为绿色
+	setlinestyle(PS_SOLID | PS_ENDCAP_ROUND, (int)note.wide);//更改画线模式为实线，两端平坦，宽度为预定宽度
+	setlinecolor(RGB(0,255,0));//更改画线颜色为绿色
+	BeginBatchDraw();//开始批量绘制，以防止出现闪烁
+
+
+
+	//hide caption
+	long WindowStyle = GetWindowLong(hwnd_graph, GWL_STYLE);
+	WindowStyle &= ~WS_CAPTION;
+	SetWindowLong(hwnd_graph, GWL_STYLE, WindowStyle);
+	//move to right place
+	MoveWindow(hwnd_graph, 0, 0, wide_graph, high_graph, false);
 	int vs;
     /* now start paying attention to messages */
     while (1) {
@@ -262,6 +323,14 @@ void main_test_input() {
     printf("done closing...");
 }
 
+void read_set() {
+	char rubbish[STRING_MAX];
+	freopen("settings.vndat", "r", stdin);
+	cin >> num_set;
+
+	freopen("CON", "r", stdin);
+}
+
 
 
 
@@ -270,12 +339,12 @@ int main(){
 
 	cout << "Loading\n";
     int default_in;
-    int default_out;
+    //int default_out;
     int i = 0, n = 0;
     char line[STRING_MAX];
 	int test_input = 1;
-	latency = 3;
-	speed = 10;
+	//latency = 3;
+	//speed = 10;
 	
 
 	desktop = GetDesktopWindow();
@@ -285,6 +354,8 @@ int main(){
 	cout << "Desktop size : " << wide_graph << " x " << high_graph << "\n";
 
 	note = get_note_wide(wide_graph);
+	glow_size = (int)(note.wide / 2);
+	glow_color_minus = 255 / glow_size + 1;
 	cout << "Note width : " << note.wide << "\n";
 	/*
 	for (int i = 0; i < 88; ++i) {
@@ -296,19 +367,20 @@ int main(){
     /* list device information */
 	cout << "Select your input device :\n";
     default_in = Pm_GetDefaultInputDeviceID();
-    default_out = Pm_GetDefaultOutputDeviceID();
+    //default_out = Pm_GetDefaultOutputDeviceID();
     for (i = 0; i < Pm_CountDevices(); i++) {
         char *deflt;
         const PmDeviceInfo *info = Pm_GetDeviceInfo(i);
-		printf("%d: %s, %s", i, info->interf, info->name);
+		
 		if (info->input) {
+			printf("%d: %s, %s", i, info->interf, info->name);
 			deflt = (i == default_in ? "default " : "");
 			printf(" (%sinput)", deflt);
 		}
 		printf("\n");
     }
 
-	main_test_input();
+	main_function();
     
 	cout << "Going to exit in 1 second...\n";
 	Sleep(1000);
