@@ -53,6 +53,7 @@ struct PARTICLE {
 	int speed;// 10 pixels per tick
 	int original_speed;//10 pixels per tick
 	int opacity;//[0,255]
+	int original_opacity;//[0,255]
 	int life;//tick
 	int life_max;//tick
 	int birth_position;//[-pixel,pixel]
@@ -62,10 +63,11 @@ struct PARTICLE {
 };
 PARTICLE data_p[PARTICLE_MAX];
 int op_p, cl_p,op_p1,cl_p1;
-int life_max = 100;
+int life_max = 150; // better no more than 200
 int particle_size = 2;
-int particle_opacity = 120;
+int particle_opacity = 200;
 int particle_speed = 50;//10 pixels
+float vs_particle_opacity;
 
 struct nodec {
 	int r;
@@ -161,7 +163,8 @@ void new_particle(int key) {
 	data_p[cl_p].size = rand() % (particle_size / 5 + 1)*(rand() % 2 * 2 - 1) + particle_size;
 	data_p[cl_p].original_speed = rand() % (particle_speed / 4 + 1)*(rand() % 2 * 2 - 1) + particle_speed;
 	data_p[cl_p].speed = data_p[cl_p].original_speed;
-	data_p[cl_p].opacity = rand() % (particle_opacity / 5 + 1)*(rand() % 2 * 2 - 1) + particle_opacity;
+	data_p[cl_p].original_opacity = (rand() % (particle_opacity / 5 + 1)*(rand() % 2 * 2 - 1) + particle_opacity)%256;
+	data_p[cl_p].opacity = data_p[cl_p].original_opacity;
 	data_p[cl_p].status = true;
 	return;
 }
@@ -198,9 +201,10 @@ void refresh_particle() {
 			
 			data_p[op_p1].speed = (int)(((float)1-(float)data_p[op_p1].life / data_p[op_p1].life_max) * data_p[op_p1].original_speed);
 			data_p[op_p1].y += (int)((float)data_p[op_p1].speed/10*((float)1-(float)abs(data_p[op_p1].birth_position)/note.wide/2))+1;
-			data_p[op_p1].x += (int)((float)data_p[op_p1].speed / 10 * ((float)data_p[op_p1].birth_position / note.wide));
-			setfillcolor(RGB(0, data_p[op_p1].opacity, 0));
-			setlinecolor(RGB(0, data_p[op_p1].opacity, 0));
+			data_p[op_p1].x += (int)((float)data_p[op_p1].speed / 10 * ((float)data_p[op_p1].birth_position / note.wide)*(float)(data_p[op_p1].life+100)/(data_p[op_p1].life_max+100)*3);
+			data_p[op_p1].opacity = abs((int)(data_p[op_p1].original_opacity - vs_particle_opacity*data_p[op_p1].life*data_p[op_p1].life));
+			setfillcolor(RGB(data_p[op_p1].opacity/4, data_p[op_p1].opacity, data_p[op_p1].opacity/4));
+			setlinecolor(RGB(data_p[op_p1].opacity/4, data_p[op_p1].opacity, data_p[op_p1].opacity/4));
 			setlinestyle(PS_SOLID | PS_ENDCAP_ROUND, 0);
 			fillcircle(data_p[op_p1].x, data_p[op_p1].y, data_p[op_p1].size);
 		}
@@ -215,6 +219,13 @@ void refresh_particle() {
 void refresh() {
 	cleardevice();
 	
+	//particle refresh
+	if (particle_on == true) {
+		clean_particle();
+		refresh_particle();
+	}
+
+	//notes
 	for (int i = 0; i < 88; ++i) {
 		if (pressing_note[i].status == NT_PRESSED) {
 			//glow
@@ -226,15 +237,14 @@ void refresh() {
 				}
 				setlinecolor(RGB(0, 255, 0));
 			}
-			//particle
+			//add particle
 			if (particle_on == true) {
 				for (int j = 0; j < num_particle_tick; ++j) {
 					new_particle(i);
 				}
 			}
 
-
-			//write
+			//draw notes
 			pressing_note[i].y += speed;
 			line(note.position[i], pressing_note[i].y, note.position[i], 0);
 			//cout << "\nprint(new): " << i;
@@ -258,10 +268,7 @@ void refresh() {
 			}
 		}
 	}
-	if (particle_on == true) {
-		clean_particle();
-		refresh_particle();
-	}
+	
 	
 	clean_data();
 	FlushBatchDraw();
@@ -380,6 +387,7 @@ void main_function() {
 	BeginBatchDraw();//开始批量绘制，以防止出现闪烁
 
 	srand(time(NULL));
+	vs_particle_opacity = (float)particle_opacity / (life_max*life_max);
 
 	//hide caption
 	long WindowStyle = GetWindowLong(hwnd_graph, GWL_STYLE);
@@ -406,19 +414,23 @@ void main_function() {
                        (long) Pm_MessageData2(buffer[0].message));
                 i++;
 				*/
-				vs = (int)Pm_MessageData1(buffer[0].message);
-				vs -= 21;
-				if ((int)Pm_MessageData2(buffer[0].message) == 0) {
-					//note_data[vs].status = NT_RELEASED;
-					pressing_note[vs].status = NT_RELEASED;
-					add_to_data(vs, pressing_note[vs].y);
-					//cout << "\n" << vs << " released";
 
-				}
-				else {
-					//note_data[vs].starty = NT_PRESSED;
-					pressing_note[vs].status = NT_PRESSED;
-					//cout << "\n" << vs << "pressed";
+				vs = (int)Pm_MessageStatus(buffer[0].message);
+				if (vs == 128 || vs == 144) {
+					vs = (int)Pm_MessageData1(buffer[0].message);
+					vs -= 21;
+					if ((int)Pm_MessageData2(buffer[0].message) == 0) {
+						//note_data[vs].status = NT_RELEASED;
+						pressing_note[vs].status = NT_RELEASED;
+						add_to_data(vs, pressing_note[vs].y);
+						//cout << "\n" << vs << " released";
+
+					}
+					else {
+						//note_data[vs].starty = NT_PRESSED;
+						pressing_note[vs].status = NT_PRESSED;
+						//cout << "\n" << vs << "pressed";
+					}
 				}
             } else {
                 assert(0);
