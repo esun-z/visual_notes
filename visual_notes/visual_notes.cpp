@@ -45,6 +45,8 @@ int glow_color_minus;
 bool particle_on = true;
 int num_particle_tick = 4;
 
+IMAGE icon;
+
 struct PARTICLE {
 	int size;
 	int speed;
@@ -228,6 +230,34 @@ int get_number(char *prompt)
     return i;
 }
 
+void show_start() {
+	loadimage(&icon, "res/icon_big.jpg");
+	RECT r = { 350,high_graph / 2 - 100,wide_graph,high_graph / 2 + 100 };
+	LOGFONT font;
+	gettextstyle(&font);
+	font.lfHeight = 150;
+	_tcscpy_s(font.lfFaceName, _T("Edwardian Script ITC"));
+	font.lfQuality = ANTIALIASED_QUALITY;
+	settextstyle(&font);
+	/*
+	BeginBatchDraw();
+	for (int i = 0; i < wide/2-200; i+=3) {
+	cleardevice();
+	putimage(wide/2 - 200 - i, high / 2 - 200, 400, 400, &icon, 0, 0);
+	Sleep(1);
+	FlushBatchDraw();
+	}
+	EndBatchDraw();
+	*/
+	putimage(50, high_graph / 2 - 150, 300, 300, &icon, 0, 0);
+	drawtext(_T("Visual Notes"), &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+	//putimage(0, high / 2 - 200, 200, 200, &icon, 0, 0);
+	FlushBatchDraw();
+	Sleep(2000);
+	cleardevice();
+	
+	return;
+}
 
 
 void main_function() {
@@ -274,6 +304,9 @@ void main_function() {
 	SetWindowLong(hwnd_graph, GWL_STYLE, WindowStyle);
 	//move to right place
 	MoveWindow(hwnd_graph, 0, 0, wide_graph, high_graph, false);
+
+	show_start();
+
 	int vs;
     /* now start paying attention to messages */
     while (1) {
@@ -337,7 +370,7 @@ void read_set() {
 
 int main(){
 
-	cout << "Loading\n";
+	//cout << "Loading\n";
     int default_in;
     //int default_out;
     int i = 0, n = 0;
