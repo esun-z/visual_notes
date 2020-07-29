@@ -43,8 +43,7 @@ bool glow_on = true;
 int glow_size;
 int glow_color_minus;
 
-bool particle_on = true;
-int num_particle_tick = 1;
+
 
 IMAGE icon;
 
@@ -63,10 +62,12 @@ struct PARTICLE {
 };
 PARTICLE data_p[PARTICLE_MAX];
 int op_p, cl_p,op_p1,cl_p1;
-int life_max = 150; // better no more than 200
+int life_max = 120; // better no more than 200
 int particle_size = 2;
 int particle_opacity = 200;
-int particle_speed = 50;//10 pixels
+int particle_speed = 70;//10 pixels
+bool particle_on = true;
+int num_particle_tick = 1;//better to be 1
 float vs_particle_opacity;
 
 struct nodec {
@@ -156,6 +157,9 @@ void new_particle(int key) {
 	cl_p %= PARTICLE_MAX;
 
 	data_p[cl_p].birth_position = rand() % glow_size*(rand() % 2 * 2 - 1);
+	if (data_p[cl_p].birth_position == 0) {
+		data_p[cl_p].birth_position += rand() % 2 * 2 - 1;
+	}
 	data_p[cl_p].x = note.position[key] + data_p[cl_p].birth_position;
 	data_p[cl_p].y = rand()%(glow_size/2+1);
 	data_p[cl_p].life_max = rand() % (life_max / 8 + 1) * (rand() % 2 * 2 - 1) + life_max;
@@ -200,8 +204,8 @@ void refresh_particle() {
 			data_p[op_p1].life++;
 			
 			data_p[op_p1].speed = (int)(((float)1-(float)data_p[op_p1].life / data_p[op_p1].life_max) * data_p[op_p1].original_speed);
-			data_p[op_p1].y += (int)((float)data_p[op_p1].speed/10*((float)1-(float)abs(data_p[op_p1].birth_position)/note.wide/2))+1;
-			data_p[op_p1].x += (int)((float)data_p[op_p1].speed / 10 * ((float)data_p[op_p1].birth_position / note.wide)*(float)(data_p[op_p1].life+100)/(data_p[op_p1].life_max+100)*3);
+			data_p[op_p1].y += (int)((float)data_p[op_p1].speed / 10 + ((float)(rand () %(data_p[op_p1].speed/5+1)))/10) + 1;
+			data_p[op_p1].x += (int)((float)data_p[op_p1].speed / 10 * ((float)(abs(data_p[op_p1].birth_position)+note.wide)*(data_p[op_p1].birth_position/(abs(data_p[op_p1].birth_position))) / (note.wide*2))*(float)(data_p[op_p1].life)/(data_p[op_p1].life_max)*2);
 			data_p[op_p1].opacity = abs((int)(data_p[op_p1].original_opacity - vs_particle_opacity*data_p[op_p1].life*data_p[op_p1].life));
 			setfillcolor(RGB(data_p[op_p1].opacity/4, data_p[op_p1].opacity, data_p[op_p1].opacity/4));
 			setlinecolor(RGB(data_p[op_p1].opacity/4, data_p[op_p1].opacity, data_p[op_p1].opacity/4));
@@ -268,6 +272,7 @@ void refresh() {
 			}
 		}
 	}
+	
 	
 	
 	clean_data();
@@ -375,6 +380,7 @@ void main_function() {
     }
 
 	cout << "Launching easyx graphics window\n";
+	
 	HWND hwnd_graph;
 	hwnd_graph = initgraph(wide_graph, high_graph, EW_SHOWCONSOLE);//打开图形窗口并获取句柄（显示控制台）
 	setbkmode(OPAQUE);//设置背景色填充而非透明背景色
@@ -397,6 +403,9 @@ void main_function() {
 	MoveWindow(hwnd_graph, 0, 0, wide_graph, high_graph, false);
 
 	show_start();
+
+	setorigin(0, desktopr.bottom - desktopr.top);
+	setaspectratio(1, -1);//纵向缩放为-1，使得y轴向上为正
 
 	int vs;
     /* now start paying attention to messages */
