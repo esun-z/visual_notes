@@ -9,6 +9,7 @@
 #include <iostream>
 #include <graphics.h>
 #include <easyx.h>
+#include <time.h>
 
 using namespace std;
 
@@ -33,8 +34,8 @@ RECT desktopr;
 int wide_graph, high_graph;
 float wide_line;
 
-int latency = 3;
-int speed = 1;
+int latency = 5;
+int speed = 3;
 int timer_max = 1;
 int timer = 0;
 
@@ -43,20 +44,28 @@ int glow_size;
 int glow_color_minus;
 
 bool particle_on = true;
-int num_particle_tick = 4;
+int num_particle_tick = 1;
 
 IMAGE icon;
 
 struct PARTICLE {
-	int size;
-	int speed;
-	int opacity;
-	int life;
+	int size;//pixels
+	int speed;// 10 pixels per tick
+	int original_speed;//10 pixels per tick
+	int opacity;//[0,255]
+	int life;//tick
+	int life_max;//tick
+	int birth_position;//[-pixel,pixel]
+	int x;
+	int y;
+	bool status;
 };
 PARTICLE data_p[PARTICLE_MAX];
-
-int use_set;
-int num_set;
+int op_p, cl_p,op_p1,cl_p1;
+int life_max = 100;
+int particle_size = 2;
+int particle_opacity = 120;
+int particle_speed = 50;//10 pixels
 
 struct nodec {
 	int r;
@@ -139,9 +148,73 @@ void clean_data() {
 	return;
 }
 
+void new_particle(int key) {
+
+	cl_p++;
+	cl_p %= PARTICLE_MAX;
+
+	data_p[cl_p].birth_position = rand() % glow_size*(rand() % 2 * 2 - 1);
+	data_p[cl_p].x = note.position[key] + data_p[cl_p].birth_position;
+	data_p[cl_p].y = rand()%(glow_size/2+1);
+	data_p[cl_p].life_max = rand() % (life_max / 8 + 1) * (rand() % 2 * 2 - 1) + life_max;
+	data_p[cl_p].life = 0;
+	data_p[cl_p].size = rand() % (particle_size / 5 + 1)*(rand() % 2 * 2 - 1) + particle_size;
+	data_p[cl_p].original_speed = rand() % (particle_speed / 4 + 1)*(rand() % 2 * 2 - 1) + particle_speed;
+	data_p[cl_p].speed = data_p[cl_p].original_speed;
+	data_p[cl_p].opacity = rand() % (particle_opacity / 5 + 1)*(rand() % 2 * 2 - 1) + particle_opacity;
+	data_p[cl_p].status = true;
+	return;
+}
+
+void clean_particle() {
+	op_p1 = op_p;
+	cl_p1 = cl_p;
+
+	if (op_p1 != cl_p1) {
+		op_p1++;
+		op_p1 %= PARTICLE_MAX;
+		if (data_p[op_p1].life >= data_p[op_p1].life_max || data_p[op_p1].status == false) {
+			data_p[op_p1].status = false;
+			op_p++;
+			op_p %= PARTICLE_MAX;
+			clean_particle();
+		}
+	}
+	return;
+}
+
+void refresh_particle() {
+	
+	cl_p1 = cl_p;
+	op_p1 = op_p;
+
+	while (op_p1 != cl_p1) {
+
+		op_p1++;
+		op_p1 %= PARTICLE_MAX;
+
+		if (data_p[op_p1].status == true && data_p[op_p1].life <= data_p[op_p1].life_max) {
+			data_p[op_p1].life++;
+			
+			data_p[op_p1].speed = (int)(((float)1-(float)data_p[op_p1].life / data_p[op_p1].life_max) * data_p[op_p1].original_speed);
+			data_p[op_p1].y += (int)((float)data_p[op_p1].speed/10*((float)1-(float)abs(data_p[op_p1].birth_position)/note.wide/2))+1;
+			data_p[op_p1].x += (int)((float)data_p[op_p1].speed / 10 * ((float)data_p[op_p1].birth_position / note.wide));
+			setfillcolor(RGB(0, data_p[op_p1].opacity, 0));
+			setlinecolor(RGB(0, data_p[op_p1].opacity, 0));
+			setlinestyle(PS_SOLID | PS_ENDCAP_ROUND, 0);
+			fillcircle(data_p[op_p1].x, data_p[op_p1].y, data_p[op_p1].size);
+		}
+	}
+
+	setlinestyle(PS_SOLID | PS_ENDCAP_ROUND, (int)note.wide);
+	setlinecolor(RGB(0, 255, 0));
+	
+	return;
+}
+
 void refresh() {
 	cleardevice();
-	BeginBatchDraw();
+	
 	for (int i = 0; i < 88; ++i) {
 		if (pressing_note[i].status == NT_PRESSED) {
 			//glow
@@ -154,6 +227,12 @@ void refresh() {
 				setlinecolor(RGB(0, 255, 0));
 			}
 			//particle
+			if (particle_on == true) {
+				for (int j = 0; j < num_particle_tick; ++j) {
+					new_particle(i);
+				}
+			}
+
 
 			//write
 			pressing_note[i].y += speed;
@@ -178,6 +257,10 @@ void refresh() {
 				data_n[op1].status = NT_NONE;
 			}
 		}
+	}
+	if (particle_on == true) {
+		clean_particle();
+		refresh_particle();
 	}
 	
 	clean_data();
@@ -296,7 +379,7 @@ void main_function() {
 	setlinecolor(RGB(0,255,0));//更改画线颜色为绿色
 	BeginBatchDraw();//开始批量绘制，以防止出现闪烁
 
-
+	srand(time(NULL));
 
 	//hide caption
 	long WindowStyle = GetWindowLong(hwnd_graph, GWL_STYLE);
@@ -341,11 +424,14 @@ void main_function() {
                 assert(0);
             }
         }
+		/*
 		timer++;
 		if (timer >= timer_max) {
 			timer %= timer_max;
 			refresh();
 		}
+		*/
+		refresh();
 		Sleep(latency);
     }
 
@@ -358,8 +444,11 @@ void main_function() {
 
 void read_set() {
 	char rubbish[STRING_MAX];
-	freopen("settings.vndat", "r", stdin);
-	cin >> num_set;
+	freopen("setting.vndat", "r", stdin);
+	scanf("%d", &glow_on);
+	scanf("%d", &particle_on);
+	scanf("%d", &speed);
+	scanf("%d", &latency);
 
 	freopen("CON", "r", stdin);
 }
@@ -370,16 +459,11 @@ void read_set() {
 
 int main(){
 
-	//cout << "Loading\n";
     int default_in;
-    //int default_out;
     int i = 0, n = 0;
     char line[STRING_MAX];
 	int test_input = 1;
-	//latency = 3;
-	//speed = 10;
 	
-
 	desktop = GetDesktopWindow();
 	GetWindowRect(desktop, &desktopr);
 	wide_graph = desktopr.right - desktopr.left;
@@ -390,12 +474,6 @@ int main(){
 	glow_size = (int)(note.wide / 2);
 	glow_color_minus = 255 / glow_size + 1;
 	cout << "Note width : " << note.wide << "\n";
-	/*
-	for (int i = 0; i < 88; ++i) {
-		cout << note.position[i] << "	";
-	}
-	cout << "\n";
-	*/
     
     /* list device information */
 	cout << "Select your input device :\n";
